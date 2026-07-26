@@ -1,0 +1,4 @@
+# local safety copies of the pre-translation scripts
+backup/
+# scaffolding for this rewrite; design.md is the doc worth publishing
+docs/implementation-plan.md
