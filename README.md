@@ -43,14 +43,19 @@ Seeing the VS Code extension's `claude.exe` in that output is the proof.
 
 Some remaining connections to `api.anthropic.com` are normal and do not mean the proxy is being bypassed: the proxy itself forwards upstream, and the extension sends telemetry that does not go through the proxy.
 
+## Rotation on quota exhaustion
+
+Verified on 2026-07-27: when the active account ran out of quota, teamclaude switched to another account **without interrupting the conversation in progress**. No error surfaced in the extension, no restart was needed, and the answer kept streaming — the switch was only visible as a change of active account in the server panel.
+
+This is the whole point of routing through the proxy rather than swapping credentials by hand: the token is chosen per request, so nothing the extension holds open has to be torn down.
+
 ## Reboot gotcha
 
 The environment variables persist across reboots. The proxy does not. After a reboot the variables point at a dead port and the extension cannot connect. Rerun `enter-teamclaude.bat` to start the proxy again, or run `exit-teamclaude.bat` to go back to a direct connection.
 
 ## Limitations
 
-- **Automatic rotation on quota exhaustion is teamclaude's feature, and it has not been verified firsthand by this repo's author.** Only the forwarding path has been verified: the extension's `claude.exe` was observed holding an established connection to `127.0.0.1:3456`, with matching `POST /v1/messages` entries in the panel. Treat the rotation behavior as upstream's claim, not this repo's.
-- Entering or leaving the mode requires a full VS Code restart, which ends any in-flight conversation.
+- Entering or leaving the mode requires a full VS Code restart, which ends any in-flight conversation. Note that this applies only to turning the mode on and off — once you are in proxy mode, account rotation itself needs no restart.
 - Closing the server window stops the proxy. That is intentional, not a bug.
 - Windows only. On macOS and Linux, use upstream's alias.
 - On very recent Node versions, short-lived `teamclaude` subcommands can print a libuv assertion as they exit. The enter script tolerates this — its output is still valid — and the resident server is unaffected.

@@ -118,6 +118,9 @@ conversation. It has to be run by hand.
 - **Automatic rotation on quota exhaustion is teamclaude's feature, and this repo's
   author has not verified it firsthand.** Only the forwarding path is verified. The
   README must not claim otherwise.
+  **Update 2026-07-27:** rotation has since been verified firsthand — a quota ran out
+  and the account switched with no interruption to the conversation in progress. The
+  README now documents this, and this constraint no longer applies.
 - **Reboot gotcha.** The environment variables persist across reboots; the proxy does
   not. After a reboot the variables point at a dead port and the extension cannot
   connect. Rerun the enter script, or run the exit script to go back to a direct
