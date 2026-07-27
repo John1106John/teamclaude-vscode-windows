@@ -29,6 +29,8 @@ Two things to know before you run either one:
 
 If the extension cannot connect after you restart, run `exit-teamclaude.bat` and restart VS Code again to get back to a direct connection.
 
+Running `enter-teamclaude.bat` when a proxy is **already** running is harmless. The second server finds port 3456 taken, prints `Port 3456 is already in use`, and exits without touching the one that is serving your traffic. Two cosmetic consequences: that failed window stays open (it is launched with `-NoExit`), and the enter script's own port check then sees the *old* server still listening and reports success. Close the stray window; nothing else needs doing.
+
 ## How to verify it is actually forwarding
 
 An open panel does **not** prove your extension is using the proxy — entries in that panel can come from any client on the machine. The reliable check is which process holds the connection:
