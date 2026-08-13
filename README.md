@@ -94,6 +94,7 @@ The launcher has nothing to leave behind, and starts the proxy itself if it is n
 
 - Starting VS Code in proxy mode means starting it fresh, which ends any in-flight conversation. This applies only to getting into the mode — once you are in it, account rotation itself needs no restart.
 - With the launcher, only the VS Code it starts is routed. Opening VS Code from the taskbar, the Start menu, or session restore silently gives you a direct connection instead.
+- Within that VS Code, *everything* inherits the proxy, not only the Claude extension — VS Code's own networking and any other extension that makes requests. teamclaude blind-tunnels every host that is not Anthropic's, so they keep working and their credentials are never touched, but their traffic does pass through the tunnel and stops if you close the server window.
 - Remote Control and tool search do not work under `enter-teamclaude.bat` (see above). Use the launcher.
 - Closing the server window stops the proxy. That is intentional, not a bug.
 - Windows only. On macOS and Linux, use upstream's alias.
