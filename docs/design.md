@@ -51,13 +51,35 @@ is unaffected either way, since the proxy overwrites the credential on every for
 request. The exit script still clears both variables so a key left by an earlier
 version gets removed.
 
+**Update 2026-08-13 (later the same day):** the base-URL approach above is now the
+*older* of two. Pointing `ANTHROPIC_BASE_URL` away from Anthropic turns out to trip an
+SDK gate that disables Remote Control and tool search (see Known limitations). Upstream
+does not hit this because its own default is the forward proxy, not base-URL routing —
+`index.js` computes `useMitm = !tcFlags.includes('--no-mitm')`, so base-URL routing is
+what you get from `--no-mitm`.
+
+So the recommended path is now `launch-teamclaude-vscode.ps1`: set `HTTPS_PROXY` at
+teamclaude and `NODE_EXTRA_CA_CERTS` at its locally minted CA, leave `ANTHROPIC_BASE_URL`
+unset, and launch VS Code as a child. The base URL stays `https://api.anthropic.com`, so
+the gate never fires; teamclaude terminates the `CONNECT` and forwards through the same
+request listener as the reverse-proxy path, so rotation is unchanged.
+
+The variables are deliberately set on the **launching process only**, not at User level.
+`HTTPS_PROXY` at User level would route every later process on the machine through
+teamclaude — fine while it runs, since non-Anthropic hosts are blind-tunnelled, but a
+dead proxy would then break `npm`, `git` and `curl` rather than just Claude. That is a
+poor thing to hand a stranger in a one-click script. The cost of process scope is that
+VS Code opened any other way silently gets a direct connection; that is stated in the
+README, and it doubles as the rollback.
+
 ## Components
 
 | File | Responsibility |
 | --- | --- |
 | `enter-teamclaude.ps1` | Check accounts exist, read the base URL from `teamclaude env`, open a separate window running `teamclaude server` (the TUI is the live quota panel), set the User-level `ANTHROPIC_BASE_URL` |
+| `launch-teamclaude-vscode.ps1` | The recommended path. Refuse to run while VS Code is up, start the proxy if it is not already listening, mint the CA if missing, then launch Code.exe with `HTTPS_PROXY` / `NODE_EXTRA_CA_CERTS` set on this process and `ANTHROPIC_BASE_URL` removed |
 | `exit-teamclaude.ps1` | Remove both variables, stop the process listening on 3456 |
-| `enter-teamclaude.bat` / `exit-teamclaude.bat` | One-click wrappers. Locate the `.ps1` via `%~dp0`, run it with `-NoProfile -ExecutionPolicy Bypass`, and `pause` so the restart instruction stays readable |
+| `*.bat` | One-click wrappers. Locate the `.ps1` via `%~dp0`, run it with `-NoProfile -ExecutionPolicy Bypass`, and `pause` so the restart instruction stays readable |
 | `README.md` | Setup, usage, verification, limitations |
 | `LICENSE` | MIT, matching upstream |
 
@@ -65,6 +87,21 @@ The scripts are already portable — no hardcoded user paths. Values come from
 `teamclaude env` at runtime; the wrappers resolve their own directory.
 
 ## Data flow
+
+Recommended (forward proxy, process scope):
+
+```text
+launch script ──> HTTPS_PROXY + NODE_EXTRA_CA_CERTS (this process only)
+                                              │
+                                    (starts Code.exe as a child)
+                                              ↓
+VS Code extension (claude.exe) ──> CONNECT api.anthropic.com:443
+                                              ↓
+                                   127.0.0.1:3456 terminates it ──> api.anthropic.com
+                                   (same listener; injects the active account's token)
+```
+
+Older (base-URL routing, User scope):
 
 ```text
 enter script ──> teamclaude env ──> ANTHROPIC_BASE_URL (User scope)
@@ -142,6 +179,14 @@ conversation. It has to be run by hand.
   Most likely the SDK refuses the feature on a non-first-party base URL, the same
   policy the log shows applied to ToolSearch. Inference, not proof: the gate is inside
   the packaged binary. The README states this as a limitation.
+  **Update, same day:** confirmed and fixed. Launched through the forward proxy — base
+  URL untouched — the log shows `[remote-bridge] Fetched bridge credentials`,
+  `[bridge:sdk] State change: connected` and `[ToolSearch:optimistic] ... result=true`,
+  with no `auto-enable failed` at all. Both gated features returning together is what
+  turns the inference into a diagnosis. The control also held: the extension's
+  `claude.exe` kept its connections to `127.0.0.1:3456` and had none direct to
+  api.anthropic.com, so this was not Remote Control bought by leaving the proxy. The
+  limitation now applies only to the older base-URL mode.
 - **Closing the server window stops the proxy.** Intentional and stated, not a bug.
 - Entering or leaving the mode requires a full VS Code restart, which ends any
   in-flight conversation.

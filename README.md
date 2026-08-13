@@ -6,9 +6,13 @@ Route the **VS Code Claude extension** through a [teamclaude](https://github.com
 
 teamclaude is a local proxy that holds several Claude accounts and rotates between them as quotas run low. Its documented setup path is `teamclaude alias --install`, which writes a shell alias — and upstream states that the alias "affects `claude` typed at a prompt, not `claude` spawned by editors or scripts." The VS Code extension spawns its own `claude.exe`, so the documented path never reaches it. Upstream also carries no Windows guidance: no PowerShell, no `.cmd`, Unix-style paths throughout.
 
-This repo closes both gaps. Instead of an alias, it sets `ANTHROPIC_BASE_URL` as a **user-level environment variable**, which the VS Code extension inherits at startup. Two scripts turn that on and off.
+This repo closes both gaps, and offers two ways to point the extension at the proxy.
 
-No `ANTHROPIC_API_KEY` is set, and that is deliberate. teamclaude skips its proxy-key check for localhost clients, so the key is not needed — and setting it makes the extension present teamclaude's proxy key as its own identity instead of the OAuth login it already holds in secure storage. Rotation is unaffected either way, because the proxy overwrites the credential on every request it forwards.
+**Recommended — `launch-teamclaude-vscode.bat`.** It starts VS Code with `HTTPS_PROXY` pointing at teamclaude and `NODE_EXTRA_CA_CERTS` pointing at teamclaude's locally minted CA, so the extension still addresses `https://api.anthropic.com` and teamclaude intercepts the `CONNECT`. That is the same forward-proxy mode upstream's own `teamclaude run` uses **by default**. The variables are set on the launching process only and inherited by the VS Code it starts, so nothing machine-wide is touched.
+
+**Older — `enter-teamclaude.bat` / `exit-teamclaude.bat`.** These set `ANTHROPIC_BASE_URL` to `http://localhost:3456` as a user-level variable, which any VS Code picks up at startup. It forwards correctly, but pointing the base URL away from Anthropic makes the SDK switch off the features it gates on a first-party host — Remote Control and tool search both stop working. See [Remote Control](#remote-control) below.
+
+Neither mode sets `ANTHROPIC_API_KEY`, and that is deliberate. teamclaude skips its proxy-key check for localhost clients, so the key is not needed — and setting it makes the extension present teamclaude's proxy key as its own identity instead of the OAuth login it already holds in secure storage. Rotation is unaffected either way, because the proxy overwrites the credential on every request it forwards.
 
 ## Prerequisites
 
@@ -21,15 +25,17 @@ No `ANTHROPIC_API_KEY` is set, and that is deliberate. teamclaude skips its prox
 
 | Action | Double-click |
 | --- | --- |
-| Turn proxy mode on | `enter-teamclaude.bat` |
-| Turn proxy mode off | `exit-teamclaude.bat` |
+| Start VS Code in proxy mode (recommended) | `launch-teamclaude-vscode.bat` |
+| Turn on the older base-URL mode | `enter-teamclaude.bat` |
+| Stop the proxy, and clear the older mode | `exit-teamclaude.bat` |
 
-Two things to know before you run either one:
+Things to know before you run any of them:
 
-- **Both directions require fully closing and reopening VS Code.** The environment variables are read once at process start, so a running extension will not pick up the change. This also ends any conversation that is in flight.
+- **Close VS Code completely first.** Environment is read once at process start, so a running instance keeps the one it was started with — launching it again only signals it to open a window. Both modes therefore end any conversation in flight.
+- **VS Code opened any other way does not use the proxy.** With the launcher, only the VS Code it starts is routed; the taskbar, the Start menu, and session restore all give you a plain environment. That is the price of not touching machine-wide state, and it is also the rollback: close VS Code, open it normally.
 - **The server window that opens *is* the proxy.** It doubles as the live quota panel. Leave it open — closing it stops the proxy.
 
-If the extension cannot connect after you restart, run `exit-teamclaude.bat` and restart VS Code again to get back to a direct connection.
+If the extension cannot connect, close VS Code and open it the normal way. If you had used `enter-teamclaude.bat`, run `exit-teamclaude.bat` first, since that mode does persist.
 
 Running `enter-teamclaude.bat` when a proxy is **already** running is harmless. The second server finds port 3456 taken, prints `Port 3456 is already in use`, and exits without touching the one that is serving your traffic. Two cosmetic consequences: that failed window stays open (it is launched with `-NoExit`), and the enter script's own port check then sees the *old* server still listening and reports success. Close the stray window; nothing else needs doing.
 
@@ -53,31 +59,42 @@ Verified on 2026-07-27: when the active account ran out of quota, teamclaude swi
 
 This is the whole point of routing through the proxy rather than swapping credentials by hand: the token is chosen per request, so nothing the extension holds open has to be torn down.
 
-## Remote Control does not work in proxy mode
+That run was under the older base-URL mode. The forward proxy hands each request to the *same* code inside teamclaude — it terminates the `CONNECT` and forwards through the same request listener, so per-request account selection and the retry on a quota `429` are the same code path — and a request sent through it with no client credentials at all comes back `200`, which shows the token is being injected. A live rotation has not yet been observed under the forward proxy specifically.
 
-The extension's Remote Control feature fails to initialize whenever the proxy is on, and this does not appear to be something a proxy can fix.
+## Remote Control
 
-The extension log stamps `OAuth tokens found in secure storage` and `Remote Control auto-enable failed` in the **same millisecond**, so the feature gives up before any request goes out — a local pre-check, not a forwarding or credential failure. teamclaude's relay is demonstrably fine: it has a dedicated pass-through for `/v1/code/*` that forwards the client's own credential untouched, and a request to that path through the proxy returns a genuine Anthropic 401 with a `request_id` rather than a proxy error.
+Remote Control works in the recommended forward-proxy mode. It does **not** work in the older base-URL mode, and that is the main reason to prefer the launcher.
 
-The likely cause is that the SDK declines to enable the feature when the base URL is not a first-party Anthropic host. The same log applies exactly that policy to a different feature:
+Started with `enter-teamclaude.bat`, the extension log stamps `OAuth tokens found in secure storage` and `Remote Control auto-enable failed` in the **same millisecond** — the feature gives up before any request leaves the machine, so it is a local pre-check rather than a forwarding or credential failure. teamclaude's relay is fine either way: it has a dedicated pass-through for `/v1/code/*` that forwards the client's own credential untouched, and a request to that path through the proxy returns a genuine Anthropic 401 with a `request_id` rather than a proxy error. Removing `ANTHROPIC_API_KEY` so the extension kept its own OAuth identity was tried too, and changed nothing.
+
+The cause is that the SDK switches such features off when the base URL is not a first-party Anthropic host. The same log applies that policy to tool search, and says so out loud:
 
 ```text
 [ToolSearch:optimistic] disabled: ANTHROPIC_BASE_URL=http://localhost:3456
 is not a first-party Anthropic host.
 ```
 
-That is inference rather than proof — the gate itself is inside the packaged binary and could not be read out. Removing `ANTHROPIC_API_KEY` so the extension keeps its own OAuth identity was tried and changed nothing, which is what rules out the credential explanation.
+The forward proxy never trips that check, because the base URL is never changed: the extension addresses `api.anthropic.com` and teamclaude intercepts the `CONNECT`. Launched that way, the same log reads:
 
-If you need Remote Control, run `exit-teamclaude.bat` and restart VS Code.
+```text
+[remote-bridge] Fetched bridge credentials (expires_in=28800s)
+[bridge:sdk] State change: connected
+[ToolSearch:optimistic] mode=tst, ENABLE_TOOL_SEARCH=undefined, result=true
+```
+
+Both features return at once — which is also what identifies the gate. And the routing is genuinely still in place: the extension's `claude.exe` holds its connections to `127.0.0.1:3456`, with none going direct to `api.anthropic.com`. Remote Control is not being bought here by bypassing the proxy.
 
 ## Reboot gotcha
 
-The environment variables persist across reboots. The proxy does not. After a reboot the variables point at a dead port and the extension cannot connect. Rerun `enter-teamclaude.bat` to start the proxy again, or run `exit-teamclaude.bat` to go back to a direct connection.
+This one applies to `enter-teamclaude.bat` only. Its environment variables persist across reboots; the proxy does not. After a reboot the variables point at a dead port and the extension cannot connect. Rerun `enter-teamclaude.bat` to start the proxy again, or run `exit-teamclaude.bat` to go back to a direct connection.
+
+The launcher has nothing to leave behind, and starts the proxy itself if it is not already up, so there is nothing to clean up after a reboot.
 
 ## Limitations
 
-- Entering or leaving the mode requires a full VS Code restart, which ends any in-flight conversation. Note that this applies only to turning the mode on and off — once you are in proxy mode, account rotation itself needs no restart.
-- Remote Control cannot be used while proxy mode is on (see above).
+- Starting VS Code in proxy mode means starting it fresh, which ends any in-flight conversation. This applies only to getting into the mode — once you are in it, account rotation itself needs no restart.
+- With the launcher, only the VS Code it starts is routed. Opening VS Code from the taskbar, the Start menu, or session restore silently gives you a direct connection instead.
+- Remote Control and tool search do not work under `enter-teamclaude.bat` (see above). Use the launcher.
 - Closing the server window stops the proxy. That is intentional, not a bug.
 - Windows only. On macOS and Linux, use upstream's alias.
 - On very recent Node versions, short-lived `teamclaude` subcommands can print a libuv assertion as they exit. The enter script tolerates this — its output is still valid — and the resident server is unaffected.
