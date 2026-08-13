@@ -18,12 +18,11 @@ $accounts | Where-Object { $_ -match '^\s*\[' } | ForEach-Object { Write-Host " 
 
 # 2. Read the environment values to set from teamclaude env
 $envLines = teamclaude env 2>&1 | Where-Object { $_ -match '^export ' }
-$baseUrl = $null; $apiKey = $null
+$baseUrl = $null
 foreach ($l in $envLines) {
   if ($l -match 'ANTHROPIC_BASE_URL=(.+)$') { $baseUrl = $Matches[1].Trim() }
-  if ($l -match 'ANTHROPIC_API_KEY=(.+)$')  { $apiKey  = $Matches[1].Trim() }
 }
-if (-not $baseUrl -or -not $apiKey) { Write-Host "X Could not read the environment values from teamclaude env."; exit 1 }
+if (-not $baseUrl) { Write-Host "X Could not read ANTHROPIC_BASE_URL from teamclaude env."; exit 1 }
 
 # 3. Open a new PowerShell window running the TUI server (panel + resident proxy; closing that window stops the proxy)
 Write-Host "Opening the teamclaude server window (live quota panel)..."
@@ -35,14 +34,18 @@ if (Get-NetTCPConnection -LocalPort 3456 -State Listen -ErrorAction SilentlyCont
   Write-Host "  ! No proxy detected on 3456 yet. Wait a few seconds, or check the new window for errors."
 }
 
-# 4. Set user-level environment variables (persistent; SetEnvironmentVariable is cleaner than setx)
+# 4. Set the base URL only (persistent; SetEnvironmentVariable is cleaner than setx).
+#    ANTHROPIC_API_KEY is deliberately NOT set. teamclaude skips its key check for
+#    localhost clients, so the key buys nothing - and setting it makes the extension
+#    send teamclaude's proxy key as its own identity, hiding the real OAuth login.
+#    Clear any key an earlier version of this script left behind.
 [Environment]::SetEnvironmentVariable('ANTHROPIC_BASE_URL', $baseUrl, 'User')
-[Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY',  $apiKey,  'User')
+[Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY',  $null,    'User')
 
 Write-Host ""
 Write-Host "OK teamclaude proxy mode is on."
 Write-Host "   Set ANTHROPIC_BASE_URL = $baseUrl"
-Write-Host "   Set ANTHROPIC_API_KEY  = (teamclaude proxy key)"
+Write-Host "   ANTHROPIC_API_KEY left unset (not needed for localhost; see README)."
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  (1) Fully close and reopen VS Code so the extension picks up the proxy."
