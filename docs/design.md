@@ -42,11 +42,20 @@ Verified working on 2026-07-26: the extension's `claude.exe` held an established
 connection to `127.0.0.1:3456`, and the proxy panel logged matching
 `POST /v1/messages` entries.
 
+**Update 2026-08-13:** `ANTHROPIC_API_KEY` is no longer set — only `ANTHROPIC_BASE_URL`
+is. teamclaude skips its proxy-key check for localhost clients, so the key was never
+needed, and setting it made the extension present teamclaude's proxy key as its own
+identity instead of the OAuth login it holds in secure storage. Verified without the
+key: inference still works and the extension still routes through the proxy. Rotation
+is unaffected either way, since the proxy overwrites the credential on every forwarded
+request. The exit script still clears both variables so a key left by an earlier
+version gets removed.
+
 ## Components
 
 | File | Responsibility |
 | --- | --- |
-| `enter-teamclaude.ps1` | Check accounts exist, read values from `teamclaude env`, open a separate window running `teamclaude server` (the TUI is the live quota panel), set both User-level variables |
+| `enter-teamclaude.ps1` | Check accounts exist, read the base URL from `teamclaude env`, open a separate window running `teamclaude server` (the TUI is the live quota panel), set the User-level `ANTHROPIC_BASE_URL` |
 | `exit-teamclaude.ps1` | Remove both variables, stop the process listening on 3456 |
 | `enter-teamclaude.bat` / `exit-teamclaude.bat` | One-click wrappers. Locate the `.ps1` via `%~dp0`, run it with `-NoProfile -ExecutionPolicy Bypass`, and `pause` so the restart instruction stays readable |
 | `README.md` | Setup, usage, verification, limitations |
@@ -58,7 +67,7 @@ The scripts are already portable — no hardcoded user paths. Values come from
 ## Data flow
 
 ```text
-enter script ──> teamclaude env ──> ANTHROPIC_BASE_URL / ANTHROPIC_API_KEY (User scope)
+enter script ──> teamclaude env ──> ANTHROPIC_BASE_URL (User scope)
                                               │
                                     (VS Code restart)
                                               ↓
@@ -125,6 +134,14 @@ conversation. It has to be run by hand.
   not. After a reboot the variables point at a dead port and the extension cannot
   connect. Rerun the enter script, or run the exit script to go back to a direct
   connection.
+- **Remote Control is unavailable in proxy mode.** Found 2026-08-13. The extension
+  aborts `Remote Control auto-enable` in the same millisecond it reads its OAuth
+  tokens, i.e. before any request leaves the machine, so it is a local pre-check
+  rather than a relay or credential failure — teamclaude's `/v1/code/*` pass-through
+  returns a genuine upstream 401, and removing `ANTHROPIC_API_KEY` changed nothing.
+  Most likely the SDK refuses the feature on a non-first-party base URL, the same
+  policy the log shows applied to ToolSearch. Inference, not proof: the gate is inside
+  the packaged binary. The README states this as a limitation.
 - **Closing the server window stops the proxy.** Intentional and stated, not a bug.
 - Entering or leaving the mode requires a full VS Code restart, which ends any
   in-flight conversation.

@@ -6,7 +6,9 @@ Route the **VS Code Claude extension** through a [teamclaude](https://github.com
 
 teamclaude is a local proxy that holds several Claude accounts and rotates between them as quotas run low. Its documented setup path is `teamclaude alias --install`, which writes a shell alias — and upstream states that the alias "affects `claude` typed at a prompt, not `claude` spawned by editors or scripts." The VS Code extension spawns its own `claude.exe`, so the documented path never reaches it. Upstream also carries no Windows guidance: no PowerShell, no `.cmd`, Unix-style paths throughout.
 
-This repo closes both gaps. Instead of an alias, it sets `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` as **user-level environment variables**, which the VS Code extension inherits at startup. Two scripts turn that on and off.
+This repo closes both gaps. Instead of an alias, it sets `ANTHROPIC_BASE_URL` as a **user-level environment variable**, which the VS Code extension inherits at startup. Two scripts turn that on and off.
+
+No `ANTHROPIC_API_KEY` is set, and that is deliberate. teamclaude skips its proxy-key check for localhost clients, so the key is not needed — and setting it makes the extension present teamclaude's proxy key as its own identity instead of the OAuth login it already holds in secure storage. Rotation is unaffected either way, because the proxy overwrites the credential on every request it forwards.
 
 ## Prerequisites
 
@@ -51,6 +53,23 @@ Verified on 2026-07-27: when the active account ran out of quota, teamclaude swi
 
 This is the whole point of routing through the proxy rather than swapping credentials by hand: the token is chosen per request, so nothing the extension holds open has to be torn down.
 
+## Remote Control does not work in proxy mode
+
+The extension's Remote Control feature fails to initialize whenever the proxy is on, and this does not appear to be something a proxy can fix.
+
+The extension log stamps `OAuth tokens found in secure storage` and `Remote Control auto-enable failed` in the **same millisecond**, so the feature gives up before any request goes out — a local pre-check, not a forwarding or credential failure. teamclaude's relay is demonstrably fine: it has a dedicated pass-through for `/v1/code/*` that forwards the client's own credential untouched, and a request to that path through the proxy returns a genuine Anthropic 401 with a `request_id` rather than a proxy error.
+
+The likely cause is that the SDK declines to enable the feature when the base URL is not a first-party Anthropic host. The same log applies exactly that policy to a different feature:
+
+```text
+[ToolSearch:optimistic] disabled: ANTHROPIC_BASE_URL=http://localhost:3456
+is not a first-party Anthropic host.
+```
+
+That is inference rather than proof — the gate itself is inside the packaged binary and could not be read out. Removing `ANTHROPIC_API_KEY` so the extension keeps its own OAuth identity was tried and changed nothing, which is what rules out the credential explanation.
+
+If you need Remote Control, run `exit-teamclaude.bat` and restart VS Code.
+
 ## Reboot gotcha
 
 The environment variables persist across reboots. The proxy does not. After a reboot the variables point at a dead port and the extension cannot connect. Rerun `enter-teamclaude.bat` to start the proxy again, or run `exit-teamclaude.bat` to go back to a direct connection.
@@ -58,6 +77,7 @@ The environment variables persist across reboots. The proxy does not. After a re
 ## Limitations
 
 - Entering or leaving the mode requires a full VS Code restart, which ends any in-flight conversation. Note that this applies only to turning the mode on and off — once you are in proxy mode, account rotation itself needs no restart.
+- Remote Control cannot be used while proxy mode is on (see above).
 - Closing the server window stops the proxy. That is intentional, not a bug.
 - Windows only. On macOS and Linux, use upstream's alias.
 - On very recent Node versions, short-lived `teamclaude` subcommands can print a libuv assertion as they exit. The enter script tolerates this — its output is still valid — and the resident server is unaffected.
