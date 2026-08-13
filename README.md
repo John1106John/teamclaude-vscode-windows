@@ -84,11 +84,13 @@ The forward proxy never trips that check, because the base URL is never changed:
 
 Both features return at once — which is also what identifies the gate. And the routing is genuinely still in place: the extension's `claude.exe` holds its connections to `127.0.0.1:3456`, with none going direct to `api.anthropic.com`. Remote Control is not being bought here by bypassing the proxy.
 
-## Reboot gotcha
+## After a reboot
 
-This one applies to `enter-teamclaude.bat` only. Its environment variables persist across reboots; the proxy does not. After a reboot the variables point at a dead port and the extension cannot connect. Rerun `enter-teamclaude.bat` to start the proxy again, or run `exit-teamclaude.bat` to go back to a direct connection.
+**With the launcher, nothing to do.** It leaves no state behind, and it starts the proxy itself whenever nothing is listening on 3456 — so the first `launch-teamclaude-vscode.bat` after a reboot behaves like any other run.
 
-The launcher has nothing to leave behind, and starts the proxy itself if it is not already up, so there is nothing to clean up after a reboot.
+That also means there is no reason to add a startup entry for the proxy. One would only leave a proxy running on the days you never open Claude, and if you point it at `enter-teamclaude.bat` it will re-apply that mode's user-level variables at every login, quietly putting a normally-opened VS Code back into base-URL mode.
+
+**With `enter-teamclaude.bat`, there is a gotcha.** Its environment variables persist across reboots; the proxy does not. After a reboot the variables point at a dead port and the extension cannot connect. Rerun `enter-teamclaude.bat` to start the proxy again, or run `exit-teamclaude.bat` to go back to a direct connection.
 
 ## Limitations
 

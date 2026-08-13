@@ -171,6 +171,9 @@ conversation. It has to be run by hand.
   not. After a reboot the variables point at a dead port and the extension cannot
   connect. Rerun the enter script, or run the exit script to go back to a direct
   connection.
+  **Update 2026-08-13:** applies to the enter script only. The launcher persists
+  nothing and starts the proxy itself when 3456 is idle, so for it the gotcha does
+  not exist.
 - **Remote Control is unavailable in proxy mode.** Found 2026-08-13. The extension
   aborts `Remote Control auto-enable` in the same millisecond it reads its OAuth
   tokens, i.e. before any request leaves the machine, so it is a local pre-check
@@ -197,3 +200,7 @@ conversation. It has to be run by hand.
 - Auto-starting the proxy at login. That turns teamclaude into a resident default —
   a change of posture rather than a fix, and a poor thing to hand a stranger in a
   one-click script. The README may mention scheduling it as an advanced option.
+  **Update 2026-08-13:** now argued against outright rather than merely left out.
+  The launcher removed the reason to want it, and a startup entry pointed at the
+  enter script actively re-applies that mode's user-level variables at every login,
+  which silently returns a normally-opened VS Code to base-URL mode.
