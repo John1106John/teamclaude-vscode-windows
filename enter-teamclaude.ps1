@@ -19,8 +19,10 @@ if ($accounts -match 'No accounts configured') {
 Write-Host "Accounts detected:"
 $accounts | Where-Object { $_ -match '^\s*\[' } | ForEach-Object { Write-Host "  $_" }
 
-# 2. Read the environment values to set from teamclaude env
-$envLines = cmd /c "teamclaude env 2>&1" | Where-Object { $_ -match '^export ' }
+# 2. Read the environment values to set from teamclaude env. Since teamclaude 1.1.8,
+#    `env` defaults to the MITM forward-proxy variables and prints no ANTHROPIC_BASE_URL
+#    at all, so this mode has to ask for the base-URL form explicitly.
+$envLines = cmd /c "teamclaude env --no-mitm 2>&1" | Where-Object { $_ -match '^export ' }
 $baseUrl = $null
 foreach ($l in $envLines) {
   if ($l -match 'ANTHROPIC_BASE_URL=(.+)$') { $baseUrl = $Matches[1].Trim() }
