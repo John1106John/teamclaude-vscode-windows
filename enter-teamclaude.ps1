@@ -7,8 +7,11 @@
 $ErrorActionPreference = 'Stop'
 $env:TEAMCLAUDE_DISABLE_AUTOUPDATE = '1'
 
-# 1. Confirm teamclaude has accounts (the command prints assertion noise on exit; its output is still valid)
-$accounts = teamclaude accounts 2>&1
+# 1. Confirm teamclaude has accounts. On Node 24 this command prints a libuv assertion
+#    to stderr as it exits even though its output is valid. With $ErrorActionPreference =
+#    'Stop', PowerShell 5.1 turns that stderr line into a terminating error, so let cmd
+#    merge the streams first and hand PowerShell plain strings.
+$accounts = cmd /c "teamclaude accounts 2>&1"
 if ($accounts -match 'No accounts configured') {
   Write-Host "X No teamclaude accounts. Run: teamclaude login (at least one, preferably two)."
   exit 1
@@ -17,7 +20,7 @@ Write-Host "Accounts detected:"
 $accounts | Where-Object { $_ -match '^\s*\[' } | ForEach-Object { Write-Host "  $_" }
 
 # 2. Read the environment values to set from teamclaude env
-$envLines = teamclaude env 2>&1 | Where-Object { $_ -match '^export ' }
+$envLines = cmd /c "teamclaude env 2>&1" | Where-Object { $_ -match '^export ' }
 $baseUrl = $null
 foreach ($l in $envLines) {
   if ($l -match 'ANTHROPIC_BASE_URL=(.+)$') { $baseUrl = $Matches[1].Trim() }

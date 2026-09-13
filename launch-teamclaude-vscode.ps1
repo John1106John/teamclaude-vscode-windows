@@ -34,8 +34,11 @@ $codeExe = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $codeExe) { Write-Host "X Could not find Code.exe. Edit this script and set the path by hand."; exit 1 }
 
-# 2. Confirm teamclaude has accounts (this command prints assertion noise on exit; its output is still valid)
-$accounts = teamclaude accounts 2>&1
+# 2. Confirm teamclaude has accounts. On Node 24 this command prints a libuv assertion
+#    to stderr as it exits even though its output is valid. With $ErrorActionPreference =
+#    'Stop', PowerShell 5.1 turns that stderr line into a terminating error, so let cmd
+#    merge the streams first and hand PowerShell plain strings.
+$accounts = cmd /c "teamclaude accounts 2>&1"
 if ($accounts -match 'No accounts configured') {
   Write-Host "X No teamclaude accounts. Run: teamclaude login (at least one, preferably two)."
   exit 1

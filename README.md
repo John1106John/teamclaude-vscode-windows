@@ -100,7 +100,7 @@ That also means there is no reason to add a startup entry for the proxy. One wou
 - Remote Control and tool search do not work under `enter-teamclaude.bat` (see above). Use the launcher.
 - Closing the server window stops the proxy. That is intentional, not a bug.
 - Windows only. On macOS and Linux, use upstream's alias.
-- On very recent Node versions, short-lived `teamclaude` subcommands can print a libuv assertion as they exit. The enter script tolerates this — its output is still valid — and the resident server is unaffected.
+- On Node 24, short-lived `teamclaude` subcommands (e.g. `accounts`, once a profile fetch succeeds) print a libuv assertion to stderr as they exit; their output is still valid and the resident server is unaffected. The scripts run those commands through `cmd /c ... 2>&1` so that, under `$ErrorActionPreference = 'Stop'`, PowerShell 5.1 does not turn the assertion into a terminating error and abort the launch before anything happens.
 
 ## Credits
 
