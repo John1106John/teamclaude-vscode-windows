@@ -28,6 +28,7 @@ Neither mode sets `ANTHROPIC_API_KEY`, and that is deliberate. teamclaude skips 
 | Start VS Code in proxy mode (recommended) | `launch-teamclaude-vscode.bat` |
 | Turn on the older base-URL mode | `enter-teamclaude.bat` |
 | Stop the proxy, and clear the older mode | `exit-teamclaude.bat` |
+| Warm every idle account once | `warm-teamclaude.bat` |
 
 Things to know before you run any of them:
 
