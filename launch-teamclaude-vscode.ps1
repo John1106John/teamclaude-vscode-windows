@@ -90,8 +90,14 @@ $env:HTTPS_PROXY = $proxyUrl
 $env:HTTP_PROXY  = $proxyUrl
 $env:https_proxy = $proxyUrl
 $env:http_proxy  = $proxyUrl
-$env:NO_PROXY    = 'localhost,127.0.0.1,::1'
-$env:no_proxy    = 'localhost,127.0.0.1,::1'
+# 169.254.169.254 is the cloud instance-metadata endpoint. A credential chain in
+# some tool the launched VS Code starts probes it to decide whether it is running
+# on a cloud VM; with the proxy set process-wide that probe arrives at teamclaude,
+# which refuses every link-local target (its SSRF policy) and logs a line each time.
+# Excluding it lets the probe fail locally and fast, exactly as it does with no proxy.
+$noProxy = 'localhost,127.0.0.1,::1,169.254.169.254,metadata.google.internal'
+$env:NO_PROXY    = $noProxy
+$env:no_proxy    = $noProxy
 $env:NODE_EXTRA_CA_CERTS = $caPath
 
 Write-Host ""
