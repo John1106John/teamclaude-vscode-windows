@@ -35,6 +35,7 @@ Things to know before you run any of them:
 - **Close VS Code completely first.** Environment is read once at process start, so a running instance keeps the one it was started with — launching it again only signals it to open a window. Both modes therefore end any conversation in flight.
 - **VS Code opened any other way does not use the proxy.** With the launcher, only the VS Code it starts is routed; the taskbar, the Start menu, and session restore all give you a plain environment. That is the price of not touching machine-wide state, and it is also the rollback: close VS Code, open it normally.
 - **The server window that opens *is* the proxy.** It doubles as the live quota panel. Leave it open — closing it stops the proxy.
+- **The panel keeps no history, so the launcher writes one.** Its rows are in memory only, and a rotation, a rate-limit 429 or an event-loop stall is unreadable once it scrolls past. The launcher starts the server with `--activity-log`, appending the same lines to `%LOCALAPPDATA%	eamclaudectivity-<date>.log`, one file per day. Nothing prunes them; they are small, but they are yours to delete.
 
 If the extension cannot connect, close VS Code and open it the normal way. If you had used `enter-teamclaude.bat`, run `exit-teamclaude.bat` first, since that mode does persist.
 

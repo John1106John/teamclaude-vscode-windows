@@ -52,13 +52,21 @@ if (Test-ProxyUp) {
   Write-Host "Proxy already listening on 127.0.0.1:$port - reusing it."
 } else {
   Write-Host "Opening the teamclaude server window (live quota panel)..."
-  Start-Process powershell -ArgumentList '-NoExit', '-Command', 'teamclaude server'
+  # The panel's activity rows live only in memory, so a rotation, a 429 or an
+  # event-loop stall is unreadable once it scrolls away - exactly when you want
+  # to know why a switch did or did not happen. --activity-log appends those
+  # same lines to a file, one per day so a given night stays easy to find.
+  $logDir = Join-Path $env:LOCALAPPDATA 'teamclaude'
+  if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+  $activityLog = Join-Path $logDir ('activity-' + (Get-Date -Format 'yyyyMMdd') + '.log')
+  Start-Process powershell -ArgumentList '-NoExit', '-Command', "teamclaude server --activity-log `"$activityLog`""
   Start-Sleep -Seconds 3
   if (-not (Test-ProxyUp)) {
     Write-Host "X No proxy on $port. Check the new window for errors, then run this again."
     exit 1
   }
   Write-Host "  Proxy is listening on 127.0.0.1:$port."
+  Write-Host "  Activity log: $activityLog"
 }
 
 # 4. The MITM certificate authority. teamclaude mints it lazily on the first intercepted
